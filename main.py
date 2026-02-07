@@ -1,30 +1,32 @@
-import pandas as pd
-import os
-from src.utils import generate_discovery_manifest, save_json_report
+from src.data_loader import DataLoader
 
 def main():
     print("🚀 Iniciando Orquestador de Pronóstico - Buñuelos La Floresta")
     print("📌 Fase Actual: 01_Data_Discovery")
     
-    # 1. Carga de datos crudos
-    raw_path = 'data/01_raw/ventas_mensuales.csv'
-    if not os.path.exists(raw_path):
-        print(f"❌ Error: No se encuentra el archivo {raw_path}")
-        return
-
-    df = pd.read_csv(raw_path)
-    df['fecha'] = pd.to_datetime(df['fecha'])
-    
-    # 2. Generación de Manifiesto de Descubrimiento
-    print("🔍 Ejecutando auditoría de salud de datos...")
-    manifest = generate_discovery_manifest(df)
-    
-    # 3. Guardar reporte informativo
-    report_path = 'outputs/reports/discovery_report.json'
-    save_json_report(manifest, report_path)
-    
-    print(f"✅ Reporte de Fase 1 generado exitosamente en: {report_path}")
-    print("🏠 Orquestación finalizada para la Fase 1.")
+    # 1. Instanciar DataLoader y cargar datos con contrato
+    try:
+        loader = DataLoader()
+        df = loader.load_raw_data()
+        
+        # 2. Ejecutar auditoría completa (incluye outliers)
+        print("🔍 Ejecutando auditoría de salud y detección de outliers...")
+        health_report = loader.audit_data(df)
+        
+        # 3. Guardar reporte JSON
+        loader.save_report(health_report)
+        
+        # 4. Generar y guardar figuras
+        print("📊 Generando visualizaciones diagnósticas...")
+        loader.generate_outlier_plot(df)
+        
+        print("✅ Fase 1 completada exitosamente.")
+        print("🏠 Orquestación finalizada para la Fase 1.")
+        
+    except Exception as e:
+        print(f"❌ ERROR CRÍTICO en la Fase 1: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()

@@ -113,16 +113,47 @@ class DataLoader:
             
             # 4. Estadísticas Detalladas
             stats = {}
+            outliers_info = {}
             if pd.api.types.is_numeric_dtype(df[col]):
+                mean = float(df[col].mean())
+                std = float(df[col].std()) if len(df) > 1 else 0.0
+                q1 = float(df[col].quantile(0.25))
+                q3 = float(df[col].quantile(0.75))
+                iqr = q3 - q1
+                
+                # IQR Outliers
+                lower_iqr = q1 - 1.5 * iqr
+                upper_iqr = q3 + 1.5 * iqr
+                outliers_iqr = df[(df[col] < lower_iqr) | (df[col] > upper_iqr)]
+                
+                # Z-Score Outliers
+                import numpy as np
+                from scipy import stats as scipy_stats
+                z_scores = np.abs(scipy_stats.zscore(df[col]))
+                outliers_z = df[z_scores > 3]
+
+                outliers_info = {
+                    "method_iqr": {
+                        "lower_bound": round(lower_iqr, 2),
+                        "upper_bound": round(upper_iqr, 2),
+                        "count": int(len(outliers_iqr)),
+                        "indices": outliers_iqr.index.tolist()
+                    },
+                    "method_zscore": {
+                        "count": int(len(outliers_z)),
+                        "indices": outliers_z.index.tolist()
+                    }
+                }
+
                 stats = {
-                    "mean": float(df[col].mean()),
+                    "mean": round(mean, 2),
                     "median": float(df[col].median()),
                     "variance": float(df[col].var()) if len(df) > 1 else 0.0,
-                    "std": float(df[col].std()) if len(df) > 1 else 0.0,
+                    "std": round(std, 2),
                     "kurtosis": float(df[col].kurt()) if len(df) > 1 else 0.0,
                     "skewness": float(df[col].skew()) if len(df) > 1 else 0.0,
-                    "p25": float(df[col].quantile(0.25)),
-                    "p75": float(df[col].quantile(0.75)),
+                    "p25": q1,
+                    "p75": q3,
                     "min": float(df[col].min()),
                     "max": float(df[col].max())
                 }
@@ -144,7 +175,8 @@ class DataLoader:
                 "cardinality_ratio": round(cardinality_ratio, 4),
                 "is_constant": is_constant,
                 "data_type": str(df[col].dtype),
-                "statistics": stats
+                "statistics": stats,
+                "outliers": outliers_info
             }
             
         return report
@@ -157,10 +189,53 @@ class DataLoader:
         file_name = self.discovery_params.get('output_report_name', f"phase_{phase_name}_report.json")
         save_path = os.path.join(report_dir, file_name)
         
+        # Clase para codificar tipos especiales en JSON
+        class DateTimeEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, (datetime, pd.Timestamp)):
+                    return obj.isoformat()
+                return super(DateTimeEncoder, self).default(obj)
+
         with open(save_path, 'w', encoding='utf-8') as f:
-            json.dump(report, f, indent=4, ensure_ascii=False)
+            json.dump(report, f, indent=4, ensure_ascii=False, cls=DateTimeEncoder)
             
         print(f"📄 Reporte de auditoría guardado en: {save_path}")
+
+    def generate_outlier_plot(self, df, column='unidades_vendidas_mensuales'):
+        """Genera y guarda el gráfico de outliers."""
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        
+        fig_dir = self.paths['figures']
+        os.makedirs(fig_dir, exist_ok=True)
+        
+        # Calcular outliers para el gráfico
+        q1 = df[column].quantile(0.25)
+        q3 = df[column].quantile(0.75)
+        iqr = q3 - q1
+        lower = q1 - 1.5 * iqr
+        upper = q3 + 1.5 * iqr
+        outliers = df[(df[column] < lower) | (df[column] > upper)]
+        
+        plt.figure(figsize=(15, 6))
+        
+        # Subplot 1: Boxplot
+        plt.subplot(1, 2, 1)
+        sns.boxplot(y=df[column], color='#AED6F1')
+        plt.title(f'Boxplot de {column}')
+        
+        # Subplot 2: Serie con Outliers
+        plt.subplot(1, 2, 2)
+        plt.plot(df['fecha'], df[column], color='#2E86C1', alpha=0.5, label='Ventas')
+        plt.scatter(outliers['fecha'], outliers[column], color='red', marker='x', label='Outliers (IQR)')
+        plt.title('Outliers en la Serie Temporal')
+        plt.legend()
+        
+        plt.tight_layout()
+        save_path = os.path.join(fig_dir, f'outliers_{column}.png')
+        plt.savefig(save_path)
+        plt.close()
+        print(f"🖼️ Gráfico de outliers guardado en: {save_path}")
 
 if __name__ == "__main__":
     import sys
