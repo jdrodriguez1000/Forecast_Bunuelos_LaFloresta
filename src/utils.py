@@ -1,6 +1,7 @@
 import json
 import os
 import pandas as pd
+import numpy as np
 from datetime import datetime
 
 class DateTimeEncoder(json.JSONEncoder):
@@ -33,6 +34,7 @@ def generate_discovery_manifest(df, phase_name="01_data_discovery"):
         "data_summary": {
             "rows": int(len(df)),
             "columns": list(df.columns),
+            "column_types": {col: str(dtype) for col, dtype in df.dtypes.items()},
             "date_range": {
                 "start": str(df['fecha'].min()),
                 "end": str(df['fecha'].max())
@@ -41,7 +43,12 @@ def generate_discovery_manifest(df, phase_name="01_data_discovery"):
         "audit_results": {
             "nulls": int(df.isnull().sum().sum()),
             "duplicates_rows": int(df.duplicated().sum()),
-            "duplicates_dates": int(df['fecha'].duplicated().sum())
+            "duplicates_dates": int(df['fecha'].duplicated().sum()),
+            "zero_variance_columns": [col for col in df.select_dtypes(include=[np.number]).columns if df[col].var() == 0],
+            "high_cardinality_columns": [
+                col for col in df.columns 
+                if (df[col].nunique() / len(df) > 0.9) and (not pd.api.types.is_datetime64_any_dtype(df[col]))
+            ]
         },
         "statistics": df.describe().to_dict()
     }
