@@ -1,0 +1,35 @@
+# Configuración del Proyecto: Pronóstico Buñuelos La Floresta
+# Este archivo centraliza los parámetros operativos y el contrato de datos.
+
+project_name: "Buñuelos La Floresta Forecasting"
+
+# 📂 Rutas del Sistema (Single Source of Truth)
+paths:
+  raw_data: "data/01_raw/ventas_mensuales.csv"
+  cleansed_data: "data/02_cleansed/"
+  features_data: "data/03_features/"
+  processed_data: "data/04_processed/"
+  reports: "outputs/reports/"
+  figures: "outputs/figures/"
+  models: "outputs/models/"
+  metrics: "outputs/metrics/"
+
+# 📜 Contrato de Datos (Schema Enforcement - Phase 1)
+# Aquí definimos exactamente qué columnas permitimos y de qué tipo deben ser.
+data_contract:
+  columns:
+    fecha: "datetime"
+    unidades_vendidas_mensuales: "int"
+  allow_extra_columns: false  # Si viene una columna no declarada, el sistema fallará.
+
+# 🧠 Parámetros del Modelo y Negocio
+forecasting:
+  horizon: 6            # Pronóstico obligatorio de 6 meses (X+1 a X+6)
+  random_state: 42      # Semilla para reproducibilidad total
+  test_size: 0.2        # Proporción para validación inicial
+
+# 🔍 Configuración de Descubrimiento (Phase 1)
+discovery:
+  sentinel_values_numeric: [0, -1, 99, 999, 9999]
+  sentinel_values_categorical: [" ", "N/A", "NA", "UNKNOWN", "EMPTY"]
+  output_report_name: "phase_01_discovery_report.json"
