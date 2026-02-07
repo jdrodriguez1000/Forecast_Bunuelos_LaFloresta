@@ -1,0 +1,75 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Environments ---
+.env
+.venv
+env/
+venv/
+ENV/
+
+# --- Jupyter Notebook ---
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+# Allow notebooks in the repository as they serve as the experimentation laboratory
+!notebooks/*.ipynb
+
+# --- Data & Outputs (Structural focus) ---
+# Ignore all data and outputs by default but keep the directory structure via .gitkeep
+data/**/*
+!data/**/.gitkeep
+outputs/**/*
+!outputs/**/.gitkeep
+
+# Allow the immutable source data
+!data/01_raw/ventas_mensuales.csv
+
+# Ignore large binary files and results
+*.parquet
+*.feather
+*.h5
+*.pickle
+*.pkl
+*.npy
+*.npz
+*.joblib
+*.model
+*.weights
+*.ckpt
+
+# --- Logs & Tests ---
+logs/
+*.log
+.pytest_cache/
+.tox/
+.coverage
+.cache
+
+# --- IDEs & OS ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
