@@ -33,3 +33,30 @@ discovery:
   sentinel_values_numeric: [0, -1, 99, 999, 9999]
   sentinel_values_categorical: [" ", "N/A", "NA", "UNKNOWN", "EMPTY"]
   output_report_name: "phase_01_discovery_report.json"
+
+# 🧼 Configuración de Preprocesamiento (Phase 2)
+preprocessing:
+  rename_columns:
+    unidades_vendidas_mensuales: "unidades"
+    
+  sentinels:
+    values: [0, -1, 999, 9999]
+    action: "validate_and_nan"  # Convertir a NaN para imputación posterior
+
+  time_series:
+    frequency: "MS"             # Inicio de mes (Month Start)
+    exclude_current_month: true # Regla del Mes X: Cortar datos del mes en curso
+    date_column: "fecha"
+
+  imputation:
+    method: "ffill"             # Forward Fill para mantener la inercia
+    fallback_method: "bfill"    # Backfill solo si el primer dato es nulo
+    
+  outliers:
+    method: "iqr"               # Método robusto Intercuartil
+    iqr_multiplier: 1.5         # Sensibilidad estándar
+    flag_column: "es_atipico"   # Nombre de la nueva columna binaria
+    
+  output:
+    filename: "ventas_preprocesadas.csv"
+    report_name: "phase_02_preprocessing_report.json"
