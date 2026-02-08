@@ -1,0 +1,45 @@
+{
+    "phase": "02_Preprocessing",
+    "timestamp": "2026-02-07T20:03:03.527081",
+    "input_metrics": {
+        "rows": 8,
+        "columns": 2,
+        "column_names": [
+            "fecha",
+            "unidades_vendidas_mensuales"
+        ]
+    },
+    "output_metrics": {
+        "rows": 8,
+        "columns": 3,
+        "column_names": [
+            "fecha",
+            "unidades",
+            "es_atipico"
+        ],
+        "column_types": {
+            "fecha": "datetime64[ns]",
+            "unidades": "float64",
+            "es_atipico": "int64"
+        }
+    },
+    "changes": {
+        "renamed_columns": {
+            "unidades_vendidas_mensuales": "unidades"
+        },
+        "sentinels_removed": 2,
+        "current_month_excluded": true,
+        "gaps_filled": 1,
+        "values_imputed": 3,
+        "columns_added": [
+            "es_atipico"
+        ]
+    },
+    "data_quality_metrics": {
+        "outliers_detected": 1,
+        "iqr_bounds": {
+            "lower": -9.38,
+            "upper": 289.62
+        }
+    }
+}
