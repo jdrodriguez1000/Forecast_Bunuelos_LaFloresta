@@ -60,3 +60,63 @@ preprocessing:
   output:
     filename: "ventas_preprocesadas.csv"
     report_name: "phase_02_preprocessing_report.json"
+
+# 📊 Configuración de Análisis Exploratorio (EDA - Phase 3)
+eda:
+  input:
+    sales_file: "ventas_preprocesadas.csv"
+    macro_file: "macro_colombia.csv" # Ubicado en data/03_features/
+  
+  output:
+    report_name: "phase_03_summary_eda.json"
+    figures_dir: "eda/"
+
+  splitting:
+    method: "fixed_range"
+    description: "División por fechas fijas para reproducibilidad total"
+    
+    # 1. ENTRENAMIENTO: Toda la historia antigua hasta finales de 2023
+    train:
+      start_date: "2018-01-01" 
+      end_date: "2023-12-01"
+      
+    # 2. VALIDACIÓN: Año completo 2024 (Ciclo completo estacional)
+    validation:
+      start_date: "2024-01-01"
+      end_date: "2024-12-01"
+      
+    # 3. TEST: Año 2025 (Hasta donde tengamos datos, simulando futuro)
+    test:
+      start_date: "2025-01-01"
+      end_date: "2025-12-01"
+
+  business_rules:
+    structural_breaks:
+      covid_period:
+        start: "2020-05-01"
+        end: "2021-02-28"
+        label: "Impacto_COVID_Pandemia"
+      
+      gran_superficie_contract:
+        start: "2022-06-01"
+        label: "Cambio_Nivel_Retail"
+    
+    seasonal_events:
+      feria_flores:
+        month: 8
+        label: "Evento_Feria_Flores"
+      semana_santa:
+        method: "dynamic"
+        label: "Evento_Semana_Santa_Movil"
+      picos_demanda:
+        fin_ano: [12, 1]
+        mitad_ano: [6, 7]
+
+    exogenous_variables:
+      economic: ["IPC", "TRM"]
+      calendar: ["Festivos_Mes", "Fines_Semana_Mes"]
+
+  analysis_params:
+    lags_plot: 24 
+    stationarity_threshold: 0.05
+    decomposition_model: "additive"
