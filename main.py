@@ -52,5 +52,27 @@ def main():
 
     print("\n🏠 Orquestación finalizada exitosamente.")
 
+    # ---------------------------------------------------------
+    # FASE 3: Análisis Exploratorio & Reglas de Negocio (EDA)
+    # ---------------------------------------------------------
+    from src.eda_pipeline import run_eda_analysis
+
+    try:
+        print("\n📈 [FASE 3] EDA & Validación de Hipótesis")
+        print("   -> 🧠 Ejecutando pipeline de análisis exploratorio...")
+        print("   -> 📅 Validando hitos (COVID, Retail) y reglas de calendario...")
+        
+        # Ejecutar el pipeline completo de EDA
+        run_eda_analysis()
+        
+        print("   ✅ Fase 3 completada. Reportes JSON y figuras generados en outputs/.")
+        
+    except Exception as e:
+        print(f"❌ ERROR CRÍTICO en la Fase 3: {e}")
+        import traceback
+        traceback.print_exc()
+
+    print("\n🏠 Orquestación finalizada exitosamente.")
+
 if __name__ == "__main__":
     main()
