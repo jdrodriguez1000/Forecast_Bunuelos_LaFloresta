@@ -140,20 +140,23 @@ def run_eda_analysis(config_path='config.yaml'):
     reports_dir = config['paths']['reports']
     ensure_directory(figures_dir)
     ensure_directory(reports_dir)
-    
+
     # --- 0. Metadata Report Initialization ---
     report_data = {
         "phase": "03_EDA",
         "timestamp": pd.Timestamp.now().isoformat(),
         "input_metrics": {},
         "output_metrics": {},
-        "dataset_stats": {},
+        "dataset_stats": {
+            "overall": {},
+            "train": {},  # New section for train-specific stats
+        },
         "analysis_results": {}
     }
 
     # --- 1. Carga & Input Metrics ---
-    config = load_config(config_path)
-    df, df_macro = load_data(config)
+    # config already loaded above
+    # df, df_macro already loaded above
     
     # Directorios de salida
     figures_dir = os.path.join(config['paths']['figures'], config['eda']['output']['figures_dir'])
@@ -206,35 +209,51 @@ def run_eda_analysis(config_path='config.yaml'):
     plt.savefig(os.path.join(figures_dir, 'splitting.png'))
     plt.close()
     
-    # --- 4. Descomposición ---
-    decomp = seasonal_decompose(df['unidades'], model='additive', period=12)
+    # --- 4. Descomposición (Sólo Train) ---
+    print("📉 Ejecutando Descomposición sobre TRAIN...")
+    decomp = seasonal_decompose(train['unidades'], model='additive', period=12)
     decomp.plot().set_size_inches(14, 10)
-    plt.savefig(os.path.join(figures_dir, 'decomposition.png'))
+    plt.savefig(os.path.join(figures_dir, 'decomposition_train.png'))
     plt.close()
-    report_data['analysis_results']['decomposition'] = "Figures generated: decomposition.png"
+    report_data['analysis_results']['decomposition'] = "Figures generated: decomposition_train.png (Calculated on Train set)"
     
-    # --- 5. Estacionariedad ---
-    adf_result = run_stationarity_test(df['unidades'])
+    # --- 5. Estacionariedad (Sólo Train) ---
+    adf_result = run_stationarity_test(train['unidades'])
+    report_data['analysis_results']['stationarity_test'] = adf_result
+    report_data['analysis_results']['stationarity_test']['note'] = "Calculated on Train set only"
     report_data['analysis_results']['stationarity_test'] = adf_result
     
-    # --- 6. Distribución Visual ---
+    # --- 6. Distribución Visual (Comparativa Train vs Full pero stats sobre Train) ---
     fig, ax = plt.subplots(1, 2, figsize=(14, 6))
-    sns.histplot(df['unidades'], kde=True, ax=ax[0])
-    df['mes'] = df.index.month
-    sns.boxplot(data=df, x='mes', y='unidades', hue='mes', legend=False, ax=ax[1])
-    plt.savefig(os.path.join(figures_dir, 'distribution_seasonality.png'))
+    
+    # Histograma solo de TRAIN para ver la distribución que aprenderá el modelo
+    sns.histplot(train['unidades'], kde=True, ax=ax[0], color='blue', label='Train')
+    ax[0].set_title("Distribución de Ventas (Train Set)")
+    
+    # Boxplot mensual sobre TRAIN para ver estacionalidad aprendible
+    train_viz = train.copy()
+    train_viz['mes'] = train_viz.index.month
+    sns.boxplot(data=train_viz, x='mes', y='unidades', hue='mes', legend=False, ax=ax[1])
+    ax[1].set_title("Estacionalidad Mensual (Train Set)")
+    
+    plt.savefig(os.path.join(figures_dir, 'distribution_seasonality_train.png'))
     plt.close()
     
-    # --- 7. Autocorrelación ---
-    fig, ax = plt.subplots(1, 2, figsize=(14, 6))
-    plot_acf(df['unidades'], lags=24, ax=ax[0])
-    plot_pacf(df['unidades'], lags=12, method='ywm', ax=ax[1])
-    plt.savefig(os.path.join(figures_dir, 'autocorrelation.png'))
-    plt.close()
-    report_data['analysis_results']['autocorrelation'] = "Figures generated: autocorrelation.png"
+    # Stats de TRAIN
+    report_data['dataset_stats']['train'] = train['unidades'].describe().to_dict()
     
-    # --- 8. Calendario y Eventos ---
-    calendar_fx = analyze_calendar_effects(df, figures_dir)
+    # --- 7. Autocorrelación (Sólo Train) ---
+    fig, ax = plt.subplots(1, 2, figsize=(14, 6))
+    plot_acf(train['unidades'], lags=24, ax=ax[0])
+    ax[0].set_title("Autocorrelation (Train)")
+    plot_pacf(train['unidades'], lags=12, method='ywm', ax=ax[1])
+    ax[1].set_title("Partial Autocorrelation (Train)")
+    plt.savefig(os.path.join(figures_dir, 'autocorrelation_train.png'))
+    plt.close()
+    report_data['analysis_results']['autocorrelation'] = "Figures generated: autocorrelation_train.png (Calculated on Train set)"
+    
+    # --- 8. Calendario y Eventos (Sólo Train) ---
+    calendar_fx = analyze_calendar_effects(train, figures_dir)
     report_data['analysis_results']['calendar_effects'] = calendar_fx
     
     # --- 9. Hitos Estructurales (Business Rules) ---
@@ -261,18 +280,20 @@ def run_eda_analysis(config_path='config.yaml'):
         "figure": "structural_breaks.png"
     }
 
-    # --- 10. Macro (Si existe) ---
+    # --- 10. Macro (Si existe - Sobre Train) ---
     if df_macro is not None:
-        merged = df.join(df_macro, how='inner')
+        # Join solo con train para correlaciones
+        merged = train.join(df_macro, how='inner')
         if not merged.empty:
             plt.figure(figsize=(8, 6))
             sns.heatmap(merged.corr(), annot=True, cmap='coolwarm')
-            plt.title('Correlación Macro')
-            plt.savefig(os.path.join(figures_dir, 'macro_correlation.png'))
+            plt.title('Correlación Macro (Train Set)')
+            plt.savefig(os.path.join(figures_dir, 'macro_correlation_train.png'))
             plt.close()
             # Guardar correlaciones
             corrs = merged.corr()['unidades'].drop('unidades').to_dict()
             report_data['analysis_results']['macro_correlations'] = corrs
+            report_data['analysis_results']['macro_correlations']['note'] = "Calculated on Train set only"
     
     # --- Final Output Metrics ---
     report_data['output_metrics'] = {
