@@ -120,3 +120,40 @@ eda:
     lags_plot: 24 
     stationarity_threshold: 0.05
     decomposition_model: "additive"
+
+# 🛠️ Configuración de Ingeniería de Características (Phase 4)
+feature_engineering:
+  input:
+    sales_file: "ventas_preprocesadas.csv"
+    macro_file: "macro_colombia.csv"
+  
+  output:
+    filename: "ventas_features.parquet"
+    report_name: "phase_04_summary_fe.json"
+
+  # 1. Variables de Calendario
+  calendar:
+    country: "Colombia"
+    features:
+      - "festivos_conteo"
+      - "fines_semana_conteo"
+      - "es_semana_santa"
+      - "es_feria_flores"
+  
+  # 2. Hitos Estructurales (Flags)
+  structural_flags:
+    covid_impact:
+      start: "2020-05-01"
+      end: "2021-02-28"
+    retail_expansion:
+      start: "2022-06-01"
+
+  # 3. Variables Macroeconómicas Seleccionadas (Basadas en correlación de Fase 3)
+  macro_selection:
+    columns:
+      - "ipc_mensual"
+      - "trm_promedio"
+      - "tasa_desempleo"
+      - "costo_insumos_index"
+      - "mes_de_prima"
+

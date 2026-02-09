@@ -50,8 +50,6 @@ def main():
         import traceback
         traceback.print_exc()
 
-    print("\n🏠 Orquestación finalizada exitosamente.")
-
     # ---------------------------------------------------------
     # FASE 3: Análisis Exploratorio & Reglas de Negocio (EDA)
     # ---------------------------------------------------------
@@ -72,7 +70,28 @@ def main():
         import traceback
         traceback.print_exc()
 
-    print("\n🏠 Orquestación finalizada exitosamente.")
+    # ---------------------------------------------------------
+    # FASE 4: Feature Engineering
+    # ---------------------------------------------------------
+    from src.features import run_feature_engineering_pipeline
+
+    try:
+        print("\n🛠️ [FASE 4] Feature Engineering & Enriquecimiento")
+        print("   -> 🗺️ Creando variables de calendario e hitos estructurales...")
+        print("   -> 🌍 Integrando indicadores macroeconómicos seleccionados...")
+        
+        # Ejecutar el pipeline completo de Feature Engineering
+        run_feature_engineering_pipeline()
+        
+        print("   ✅ Fase 4 completada. Dataset .parquet y reporte generados.")
+        
+    except Exception as e:
+        print(f"❌ ERROR CRÍTICO en la Fase 4: {e}")
+        import traceback
+        traceback.print_exc()
+
+    print("\n🏁 Orquestación total finalizada exitosamente.")
 
 if __name__ == "__main__":
     main()
+
