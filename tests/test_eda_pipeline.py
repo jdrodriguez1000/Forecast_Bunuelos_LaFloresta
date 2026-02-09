@@ -40,6 +40,12 @@ def sample_config():
                 'train': {'start_date': '2023-01-01', 'end_date': '2023-03-01'},
                 'validation': {'start_date': '2023-04-01', 'end_date': '2023-05-01'},
                 'test': {'start_date': '2023-06-01', 'end_date': '2023-07-01'}
+            },
+            'business_rules': {
+                'structural_breaks': {
+                    'covid_period': {'start': '2020-03-01', 'end': '2021-02-01'},
+                    'gran_superficie_contract': {'start': '2022-06-01'}
+                }
             }
         }
     }
@@ -143,3 +149,75 @@ def test_numpy_conversion_logic():
     assert convert_numpy(np.array([1, 2])) == [1, 2]
     assert convert_numpy(np.bool_(True)) == True
     assert convert_numpy(np.nan) is None
+
+@patch('src.eda_pipeline.seasonal_decompose')
+@patch('src.eda_pipeline.plot_acf')
+@patch('src.eda_pipeline.plot_pacf')
+@patch('src.eda_pipeline.run_stationarity_test')
+@patch('src.eda_pipeline.analyze_calendar_effects')
+@patch('src.eda_pipeline.load_data')
+@patch('src.eda_pipeline.load_config')
+@patch('src.eda_pipeline.plt')
+@patch('src.eda_pipeline.sns')
+@patch('src.eda_pipeline.json.dump')
+@patch('builtins.open')
+@patch('os.listdir')
+@patch('os.makedirs')
+def test_data_leakage_prevention_in_analysis(
+    mock_makedirs, mock_listdir, mock_open, mock_json_dump, mock_sns, mock_plt,
+    mock_load_config, mock_load_data, 
+    mock_calendar, mock_stationarity, mock_plot_pacf, mock_plot_acf, mock_decompose,
+    sample_config, sample_df
+):
+    """
+    Test de Seguridad Crítico:
+    Verifica que los análisis de EDA (Descomposición, ADF, ACF)
+    se ejecuten ESTRICTAMENTE sobre el conjunto de TRAIN.
+    """
+    from src.eda_pipeline import run_eda_analysis
+    
+    # 1. Configurar Mocks para devolver datos de prueba
+    mock_load_config.return_value = sample_config
+    mock_load_data.return_value = (sample_df, None)
+    
+    # Evitar errores de atributo en mocks anidados
+    mock_decompose.return_value.plot.return_value.set_size_inches = MagicMock()
+    mock_stationarity.return_value = {'p_value': 0.05, 'is_stationary': False, 'adf_statistic': -1.0}
+    mock_calendar.return_value = {}
+    mock_listdir.return_value = ['dummy.png']
+    
+    # Configure plt.subplots to return a tuple (fig, axes) to avoid unpacking error
+    mock_axes = MagicMock()
+    mock_plt.subplots.return_value = (MagicMock(), mock_axes)
+    
+    # 2. Ejecutar el Pipeline (Orquestador)
+    # Pasamos una ruta dummy porque load_config está mockeado
+    run_eda_analysis('dummy_config.yaml')
+    
+    # 3. Validaciones de Fuga de Datos (Data Leakage)
+    
+    # Fecha de corte de Train según fixture: 2023-03-01
+    # Datos completos van hasta: 2023-07-01
+    train_end_date = pd.Timestamp(sample_config['eda']['splitting']['train']['end_date'])
+    
+    # A. Validar Descomposición Estacional
+    assert mock_decompose.called, "Se debe ejecutar seasonal_decompose"
+    args, _ = mock_decompose.call_args
+    # args[0] es la serie pasada a la función
+    max_date_decompose = args[0].index.max()
+    assert max_date_decompose <= train_end_date, \
+        f"🚨 DATA LEAKAGE: Descomposición usó datos hasta {max_date_decompose} (Train corta en {train_end_date})"
+
+    # B. Validar Test de Estacionariedad
+    assert mock_stationarity.called
+    args, _ = mock_stationarity.call_args
+    max_date_adf = args[0].index.max()
+    assert max_date_adf <= train_end_date, \
+        f"🚨 DATA LEAKAGE: Test ADF usó datos hasta {max_date_adf}"
+
+    # C. Validar Autocorrelación
+    assert mock_plot_acf.called
+    args, _ = mock_plot_acf.call_args
+    max_date_acf = args[0].index.max()
+    assert max_date_acf <= train_end_date, \
+        f"🚨 DATA LEAKAGE: Plot ACF usó datos hasta {max_date_acf}"
