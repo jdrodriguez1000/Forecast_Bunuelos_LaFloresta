@@ -145,3 +145,155 @@ feature_engineering:
       - "costo_insumos_index"
       - "mes_de_prima"
 
+# ==============================================================================
+# 5. Parámetros GLOBALES de Entrenamiento y Experimentación (Phase 5)
+# ==============================================================================
+training_parameters:
+  # --- Parámetros de Negocio ---
+  forecast_horizon: 6
+  forecast_gap: 1
+  
+  # --- Parámetros de Evaluación y Selección ---
+  metric_for_tuning: 'mean_absolute_error'
+  n_top_candidates_to_validate: 5 
+
+  # --- Parámetros para el Grid Search de skforecast ---
+  grid_search_cv_params:
+    initial_train_size: null 
+    steps: 6
+    refit: false 
+    fixed_train_size: false
+    allow_incomplete_folds: true
+    return_best: true
+    verbose: false
+
+  # Grillas para Grid Search
+  hyperparameter_grids:
+    LightGBM:
+      n_estimators      : [100, 500]
+      max_depth         : [5, 10]
+      learning_rate     : [0.01, 0.1]
+      num_leaves        : [31, 64]
+      
+    RandomForest:
+      n_estimators      : [100, 500]
+      max_depth         : [5, 15]
+      min_samples_split : [2, 10]
+      
+    Ridge:
+      alpha: [0.1, 1.0, 10.0, 100.0]
+    
+    GradientBoostingRegressor:
+      n_estimators      : [100, 300]
+      learning_rate     : [0.01, 0.1]
+      max_depth         : [3, 7]
+
+    HistGradientBoostingRegressor:
+      learning_rate     : [0.01, 0.1]
+      max_iter          : [100, 300]
+      max_leaf_nodes    : [20, 40]
+
+    xgb.XGBRegressor:
+      n_estimators      : [100, 500]
+      learning_rate     : [0.01, 0.1]
+      max_depth         : [3, 7]
+
+# ==============================================================================
+# 6. ESPACIOS DE BÚSQUEDA PARA OPTIMIZACIÓN BAYESIANA
+# ==============================================================================
+bayesian_search_spaces:
+  xgb.XGBRegressor:
+    n_estimators: ['suggest_int', 100, 1000]
+    max_depth: ['suggest_int', 3, 10]
+    learning_rate: ['suggest_float', 0.01, 0.2, {'log': true}]
+    subsample: ['suggest_float', 0.6, 1.0]
+
+  LightGBM:
+    n_estimators: ['suggest_int', 100, 1000]
+    max_depth: ['suggest_int', 5, 20]
+    learning_rate: ['suggest_float', 0.01, 0.2, {'log': true}]
+    num_leaves: ['suggest_int', 20, 128]
+    
+  RandomForest:
+    n_estimators: ['suggest_int', 100, 800]
+    max_depth: ['suggest_int', 5, 25]
+
+# ==============================================================================
+# 7. CONFIGURACIÓN DE MODELOS DE LÍNEA BASE (BASELINES)
+# ==============================================================================
+baseline_models:
+  - name: 'run00_naive_baseline'
+    enabled: true
+    description: 'Pronóstico ingenuo estacional (X = X-12).'
+    forecaster_type: 'ForecasterEquivalentDate'
+    forecasting_parameters:
+      offset: 12    
+      n_offsets: 1      
+    exogenous_features:
+      features_to_use: []
+    preprocessing:
+      target_transform: null
+      differentiation: 0
+
+# ==============================================================================
+# 8. LISTA DE EXPERIMENTOS (Hoja de Ruta del Torneo)
+# ==============================================================================
+experiments:
+  # EXPERIMENTO 01: Solo historia
+  - name: 'run01_endogenous'
+    enabled: true
+    description: 'Lags y tendencias locales. Sin exógenas.'
+    models_to_train: ['LightGBM', 'RandomForest', 'Ridge', 'xgb.XGBRegressor']
+    forecasting_parameters:
+      type: 'ForecasterDirect'
+      lags_grid:
+        - [1, 2, 3, 6, 12]
+    exogenous_features:
+      features_to_use: []
+    preprocessing:
+      target_transform: null
+      differentiation: 0
+
+  # EXPERIMENTO 02: Historia + Calendario
+  - name: 'run02_with_calendar'
+    enabled: true
+    description: 'Añadir variables de calendario (Festivos, Fines de Semana).'
+    models_to_train: ['LightGBM', 'RandomForest', 'Ridge']
+    forecasting_parameters:
+      type: 'ForecasterDirect'
+      lags_grid:
+        - [1, 2, 3, 6, 12]
+    exogenous_features:
+      features_to_use: ['festivos_conteo', 'fines_semana_conteo', 'es_semana_santa']
+    preprocessing:
+      target_transform: null
+      differentiation: 0
+
+  # EXPERIMENTO 03: Modelo Completo + Pesos por Era
+  - name: 'run03_full_weighted'
+    enabled: true
+    description: 'Modelo completo con ponderación para mitigar impacto COVID y priorizar Retail.'
+    models_to_train: ['LightGBM', 'RandomForest', 'xgb.XGBRegressor']
+    forecasting_parameters:
+      type: 'ForecasterDirect'
+      lags_grid:
+        - [1, 2, 3, 6, 12]
+    exogenous_features:
+      features_to_use: 'all'
+      event_definitions:
+          fase_pre_pandemia: { start_date: '2018-01-01', end_date: '2020-04-30' }
+          fase_crisis_covid: { start_date: '2020-05-01', end_date: '2021-02-28' }
+          fase_recuperacion: { start_date: '2021-03-01', end_date: '2022-05-31' }
+          fase_retail:       { start_date: '2022-06-01', end_date: '2026-12-31' }
+    preprocessing:
+      target_transform: 'yeo-johnson'
+      differentiation: 0
+    training_options:
+      use_weights: true
+      weight_function_type: 'by_era' 
+      weight_distribution:
+        default: 0.5
+        fase_pre_pandemia: 0.5
+        fase_crisis_covid: 0.1      # Ignorar anomalía
+        fase_recuperacion: 0.7
+        fase_retail: 1.0            # Prioridad máxima
