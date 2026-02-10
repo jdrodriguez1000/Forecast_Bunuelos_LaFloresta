@@ -25,7 +25,8 @@ def sample_config():
             'cleansed_data': 'test_data',
             'features_data': 'test_data',
             'figures': 'test_outputs',
-            'reports': 'test_outputs'
+            'reports': 'test_outputs',
+            'metrics': 'test_outputs'
         },
         'eda': {
             'input': {

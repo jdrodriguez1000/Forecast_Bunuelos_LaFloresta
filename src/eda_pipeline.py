@@ -302,7 +302,7 @@ def run_eda_analysis(config_path='config.yaml'):
         "report_location": reports_dir
     }
     
-    # Guardar Reporte JSON
+    # Guardar Reporte JSON Principal (Fase 3)
     report_path = os.path.join(reports_dir, config['eda']['output']['report_name'])
     
     # Convert numpy types to native for JSON serialization
@@ -326,6 +326,24 @@ def run_eda_analysis(config_path='config.yaml'):
         json.dump(report_data, f, indent=4, default=convert_numpy)
         
     print(f"✅ EDA Finalizado. Reporte guardado en: {report_path}")
+
+    # --- 11. Nuevo: Guardar Métricas de Data Drift (Histórico Inmutable) ---
+    metrics_dir = config['paths']['metrics']
+    ensure_directory(metrics_dir)
+    
+    timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
+    drift_filename = f"data_drift_{timestamp}.json"
+    drift_path = os.path.join(metrics_dir, drift_filename)
+    
+    drift_metrics = {
+        "data_splitting": report_data['analysis_results']['data_splitting'],
+        "drift_analysis": report_data['analysis_results']['drift_analysis']
+    }
+    
+    with open(drift_path, 'w', encoding='utf-8') as f:
+        json.dump(drift_metrics, f, indent=4, default=convert_numpy)
+        
+    print(f"📉 Métricas de Data Drift guardadas (Histórico): {drift_path}")
     print(f"✅ Figuras guardadas en: {figures_dir}")
 
 if __name__ == "__main__":
