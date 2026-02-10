@@ -69,6 +69,7 @@ eda:
   
   output:
     report_name: "phase_03_summary_eda.json"
+    drift_report_prefix: "data_drift"
     figures_dir: "eda/"
 
   splitting:

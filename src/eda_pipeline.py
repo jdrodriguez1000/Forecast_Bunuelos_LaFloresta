@@ -332,7 +332,8 @@ def run_eda_analysis(config_path='config.yaml'):
     ensure_directory(metrics_dir)
     
     timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
-    drift_filename = f"data_drift_{timestamp}.json"
+    prefix = config['eda']['output'].get('drift_report_prefix', 'data_drift')
+    drift_filename = f"{prefix}_{timestamp}.json"
     drift_path = os.path.join(metrics_dir, drift_filename)
     
     drift_metrics = {
