@@ -51,13 +51,33 @@ def load_data(config):
     return df, df_macro
 
 def perform_splitting(df, config):
-    """Divide el dataset en Train/Val/Test usando fechas fijas."""
+    """Divide el dataset en Train/Val/Test usando fechas fijas o dinámicas."""
     split_conf = config['eda']['splitting']
+    method = split_conf.get('method', 'fixed_range')
     
-    train = df.loc[split_conf['train']['start_date']:split_conf['train']['end_date']].copy()
-    val = df.loc[split_conf['validation']['start_date']:split_conf['validation']['end_date']].copy()
-    test = df.loc[split_conf['test']['start_date']:split_conf['test']['end_date']].copy()
-    
+    if method == "fixed_range":
+        train = df.loc[split_conf['train']['start_date']:split_conf['train']['end_date']].copy()
+        val = df.loc[split_conf['validation']['start_date']:split_conf['validation']['end_date']].copy()
+        test = df.loc[split_conf['test']['start_date']:split_conf['test']['end_date']].copy()
+    else:
+        # Lógica Dinámica: Basada en posiciones (asumiendo frecuencia MS garantizada)
+        test_months = split_conf['test_months']
+        val_months = split_conf['validation_months']
+        
+        # Test: Últimos N meses
+        test = df.iloc[-test_months:].copy()
+        
+        # Validation: N meses previos al test
+        val = df.iloc[-(test_months + val_months): -test_months].copy()
+        
+        # Train: Todo lo anterior
+        train = df.iloc[: -(test_months + val_months)].copy()
+        
+        print(f"🔄 División Dinámica activada:")
+        print(f"   - Train: {train.index.min().date()} a {train.index.max().date()} ({len(train)} meses)")
+        print(f"   - Val:   {val.index.min().date()} a {val.index.max().date()} ({len(val)} meses)")
+        print(f"   - Test:  {test.index.min().date()} a {test.index.max().date()} ({len(test)} meses)")
+        
     return train, val, test
 
 def analyze_drift(train, val, test):

@@ -73,23 +73,10 @@ eda:
     figures_dir: "eda/"
 
   splitting:
-    method: "fixed_range"
-    description: "División por fechas fijas para reproducibilidad total"
-    
-    # 1. ENTRENAMIENTO: Toda la historia antigua hasta finales de 2023
-    train:
-      start_date: "2018-01-01" 
-      end_date: "2023-12-01"
-      
-    # 2. VALIDACIÓN: Año completo 2024 (Ciclo completo estacional)
-    validation:
-      start_date: "2024-01-01"
-      end_date: "2024-12-01"
-      
-    # 3. TEST: Año 2025 (Hasta donde tengamos datos, simulando futuro)
-    test:
-      start_date: "2025-01-01"
-      end_date: "2025-12-01"
+    method: "dynamic"
+    description: "División automática basada en el último mes completo disponible"
+    validation_months: 12
+    test_months: 12
 
   business_rules:
     structural_breaks:

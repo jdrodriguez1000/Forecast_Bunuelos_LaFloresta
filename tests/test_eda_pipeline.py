@@ -74,6 +74,28 @@ def test_perform_splitting(sample_df, sample_config):
     assert val.index.min() == pd.Timestamp('2023-04-01')
     assert test.index.min() == pd.Timestamp('2023-06-01')
 
+def test_perform_splitting_dynamic(sample_df):
+    """Verifica la lógica de división dinámica basada en meses."""
+    dynamic_config = {
+        'eda': {
+            'splitting': {
+                'method': 'dynamic',
+                'test_months': 2,
+                'validation_months': 2
+            }
+        }
+    }
+    # sample_df tiene 7 meses (Enero a Julio 2023)
+    train, val, test = perform_splitting(sample_df, dynamic_config)
+    
+    assert len(test) == 2      # Junio, Julio
+    assert len(val) == 2       # Abril, Mayo
+    assert len(train) == 3     # Enero, Febrero, Marzo
+    
+    assert test.index.max() == pd.Timestamp('2023-07-01')
+    assert val.index.max() == pd.Timestamp('2023-05-01')
+    assert train.index.max() == pd.Timestamp('2023-03-01')
+
 
 def test_analyze_drift(sample_df, sample_config):
     """Verifica el cálculo de drift."""
