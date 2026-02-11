@@ -90,6 +90,26 @@ def main():
         import traceback
         traceback.print_exc()
 
+    # ---------------------------------------------------------
+    # FASE 5: Pronóstico Final (Motor de Inferencia)
+    # ---------------------------------------------------------
+    from src.forecast import run_forecast_pipeline
+
+    try:
+        print("\n🔮 [FASE 5] Generación de Pronóstico")
+        print("   -> 📦 Cargando modelo campeón (final_model.joblib)...")
+        print("   -> 📈 Generando predicción para los próximos 6 meses...")
+        
+        # Ejecutar el motor de pronóstico
+        run_forecast_pipeline()
+        
+        print("   ✅ Fase 5 completada. Pronóstico exportado a outputs/metrics/.")
+        
+    except Exception as e:
+        print(f"⚠️ AVISO: No se pudo generar el pronóstico final: {e}")
+        # No detenemos el flujo principal si el modelo aún no existe
+        # pero informamos que la fase falló.
+
     print("\n🏁 Orquestación total finalizada exitosamente.")
 
 if __name__ == "__main__":

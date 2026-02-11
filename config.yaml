@@ -13,6 +13,8 @@ paths:
   figures: "outputs/figures/"
   models: "outputs/models/"
   metrics: "outputs/metrics/"
+  forecasts: "outputs/forecasts/"
+
 
 # 📜 Contrato de Datos (Schema Enforcement - Phase 1)
 # Aquí definimos exactamente qué columnas permitimos y de qué tipo deben ser.
@@ -25,6 +27,7 @@ data_contract:
 # 🧠 Parámetros del Modelo y Negocio
 forecasting:
   horizon: 6            # Pronóstico obligatorio de 6 meses (X+1 a X+6)
+  gap: 0                # Salto del mes actual (Mes X) para predecir X+1 a X+6
   random_state: 42      # Semilla para reproducibilidad total
   test_size: 0.2        # Proporción para validación inicial
 
@@ -119,7 +122,7 @@ feature_engineering:
     filename: "ventas_features.parquet"
     report_name: "phase_04_summary_fe.json"
 
-  # 1. Variables de Calendario
+  # 1. Variables de Calendario y Eventos Detallados
   calendar:
     country: "Colombia"
     features:
@@ -127,23 +130,46 @@ feature_engineering:
       - "fines_semana_conteo"
       - "es_semana_santa"
       - "es_feria_flores"
+      - "conteo_novenas"        # Días 16-24 de Diciembre
+      - "es_puente_festivo"     # Marcador de lunes festivo (turismo/ocio)
+      - "efecto_quincena"       # Fines de semana próximos a días 15 y 30
+      - "mes_sin"
+      - "mes_cos"
+      - "trimestre_sin"
+      - "trimestre_cos"
   
-  # 2. Hitos Estructurales (Flags)
+  # 2. Hitos Estructurales y Contexto de Negocio
   structural_flags:
     covid_impact:
       start: "2020-05-01"
       end: "2021-02-28"
     retail_expansion:
       start: "2022-06-01"
+    contract_maturation:        # Tiempo transcurrido desde hito clave
+      reference_date: "2022-06-01"
 
-  # 3. Variables Macroeconómicas Seleccionadas (Basadas en correlación de Fase 3)
+  # 3. Intensidad Estacional (Mapeo de Importancia)
+  # Ayuda al modelo a diferenciar la magnitud de los picos.
+  intensity_mapping:
+    super_pico: [12]            # Diciembre (Explosión de ventas)
+    pico_alto: [6, 8]           # Junio (Primas) y Agosto (Feria de Flores)
+    pico_medio: [7, 12]         # Julio (Vacaciones)
+    normal: [1, 2, 3, 4, 5, 9, 10, 11]
+
+  # 4. Momentum y Crecimiento (Captura de Tendencia Reciente)
+  growth_momentum:
+    yoy_comparison: true        # Comparar con mismo mes del año anterior
+    rolling_windows: [3, 6]     # Ventanas para calcular media móvil de crecimiento
+
+  # 5. Variables Macroeconómicas y Económicas
   macro_selection:
     columns:
       - "ipc_mensual"
+      - "ipc_alimentos_mensual" # Crítico para consumo popular
       - "trm_promedio"
       - "tasa_desempleo"
       - "costo_insumos_index"
-      - "mes_de_prima"
+      - "mes_de_prima"          # Junio y Diciembre (Inyección de liquidez)
 
 # ==============================================================================
 # 5. Parámetros GLOBALES de Entrenamiento y Experimentación (Phase 5)
@@ -151,7 +177,7 @@ feature_engineering:
 training_parameters:
   # --- Parámetros de Negocio ---
   forecast_horizon: 6
-  forecast_gap: 1
+  gap: 0
   
   # --- Parámetros de Evaluación y Selección ---
   metric_for_tuning: 'mean_absolute_error'
@@ -177,7 +203,7 @@ training_parameters:
       
     RandomForest:
       n_estimators      : [100, 500]
-      max_depth         : [5, 15]
+      max_depth         : [10, 20, 30, null]
       min_samples_split : [2, 10]
       
     Ridge:
@@ -216,7 +242,7 @@ bayesian_search_spaces:
     
   RandomForest:
     n_estimators: ['suggest_int', 100, 800]
-    max_depth: ['suggest_int', 5, 25]
+    max_depth: ['suggest_int', 10, 25]
 
 # ==============================================================================
 # 7. CONFIGURACIÓN DE MODELOS DE LÍNEA BASE (BASELINES)
@@ -239,61 +265,161 @@ baseline_models:
 # 8. LISTA DE EXPERIMENTOS (Hoja de Ruta del Torneo)
 # ==============================================================================
 experiments:
-  # EXPERIMENTO 01: Solo historia
+  # EXPERIMENTO 01: Solo historia (Laboratorio Técnico)
   - name: 'run01_endogenous'
     enabled: true
-    description: 'Lags y tendencias locales. Sin exógenas.'
-    models_to_train: ['LightGBM', 'RandomForest', 'Ridge', 'xgb.XGBRegressor']
+    description: 'Hipótesis: Calibración técnica (Dif vs Trans) usando solo el pasado de la serie.'
+    models_to_train:
+      - 'LightGBM'
+      - 'RandomForest'
+      - 'Ridge'
+      - 'xgb.XGBRegressor'
     forecasting_parameters:
       type: 'ForecasterDirect'
+      gap: 0
       lags_grid:
-        - [1, 2, 3, 6, 12]
-    exogenous_features:
-      features_to_use: []
-    preprocessing:
-      target_transform: null
-      differentiation: 0
-
-  # EXPERIMENTO 02: Historia + Calendario
-  - name: 'run02_with_calendar'
+        - [1, 2, 3]
+      window_features:
+        enabled: true
+        stats: ['mean', 'mean', 'mean', 'std', 'std', 'std', 'max', 'max', 'max']
+        window_sizes: [3, 6, 12, 3, 6, 12, 3, 6, 12]
+  
+  # EXPERIMENTO 02: Solo variables "nativas" del calendario
+  - name: 'run02_with_calendar_features'
     enabled: true
-    description: 'Añadir variables de calendario (Festivos, Fines de Semana).'
-    models_to_train: ['LightGBM', 'RandomForest', 'Ridge']
+    description: 'Hipótesis: Variables cíclicas (Sin/Cos) + Año y Semestre capturan mejor la periodicidad.'
+    models_to_train:
+      - 'LightGBM'
+      - 'RandomForest'
+      - 'Ridge'
+      - 'xgb.XGBRegressor'
     forecasting_parameters:
       type: 'ForecasterDirect'
+      gap: 0
       lags_grid:
-        - [1, 2, 3, 6, 12]
+        - [1, 2, 3]
+      window_features:
+        enabled: true
+        stats: ['mean', 'mean', 'mean', 'std', 'std', 'std', 'max', 'max', 'max']
+        window_sizes: [3, 6, 12, 3, 6, 12, 3, 6, 12]
     exogenous_features:
-      features_to_use: ['festivos_conteo', 'fines_semana_conteo', 'es_semana_santa']
-    preprocessing:
-      target_transform: null
-      differentiation: 0
+      features_to_use: ['mes_sin', 'mes_cos', 'trimestre_sin', 'trimestre_cos', 'anio', 'semestre']
 
-  # EXPERIMENTO 03: Modelo Completo + Pesos por Era
-  - name: 'run03_full_weighted'
+  # EXPERIMENTO 03: Calendario Nativo + Eventos/Conteo
+  - name: 'run03_full_calendar_features'
     enabled: true
-    description: 'Modelo completo con ponderación para mitigar impacto COVID y priorizar Retail.'
-    models_to_train: ['LightGBM', 'RandomForest', 'xgb.XGBRegressor']
+    description: 'Hipótesis: Calendario completo (Cíclico + Eventos como Festivos y Feria de Flores).'
+    models_to_train:
+      - 'LightGBM'
+      - 'RandomForest'
+      - 'Ridge'
+      - 'xgb.XGBRegressor'
     forecasting_parameters:
       type: 'ForecasterDirect'
+      gap: 0
       lags_grid:
-        - [1, 2, 3, 6, 12]
+        - [1, 2, 3]
+      window_features:
+        enabled: true
+        stats: ['mean', 'mean', 'mean', 'std', 'std', 'std', 'max', 'max', 'max']
+        window_sizes: [3, 6, 12, 3, 6, 12, 3, 6, 12]
+    exogenous_features:
+      features_to_use: ['mes_sin', 'mes_cos', 'trimestre_sin', 'trimestre_cos', 'anio', 'semestre', 'festivos_conteo', 'fines_semana_conteo', 'es_semana_santa', 'es_feria_flores', 'mes_de_prima', 'conteo_novenas', 'es_puente_festivo', 'efecto_quincena']
+
+  # EXPERIMENTO 04: Impacto de Hitos Estructurales
+  - name: 'run04_structural_evolution'
+    enabled: true
+    description: 'Hipótesis: El calendario completo más los hitos de COVID y la entrada a Retail.'
+    models_to_train:
+      - 'LightGBM'
+      - 'RandomForest'
+      - 'Ridge'
+      - 'xgb.XGBRegressor'
+    forecasting_parameters:
+      type: 'ForecasterDirect'
+      gap: 0
+      lags_grid:
+        - [1, 2, 3]
+      window_features:
+        enabled: true
+        stats: ['mean', 'mean', 'mean', 'std', 'std', 'std', 'max', 'max', 'max']
+        window_sizes: [3, 6, 12, 3, 6, 12, 3, 6, 12]
+    exogenous_features:
+      features_to_use: ['mes_sin', 'mes_cos', 'trimestre_sin', 'trimestre_cos', 'anio', 'semestre', 'festivos_conteo', 'fines_semana_conteo', 'es_semana_santa', 'es_feria_flores', 'mes_de_prima', 'conteo_novenas', 'es_puente_festivo', 'efecto_quincena', 'flag_covid', 'flag_retail', 'maduracion_contrato']
+
+  # EXPERIMENTO 05: Contexto Macroeconómico
+  - name: 'run05_macro_context'
+    enabled: true
+    description: 'Hipótesis: Variables económicas como Inflación (IPC) y TRM ayudan a predecir cambios.'
+    models_to_train:
+      - 'LightGBM'
+      - 'RandomForest'
+      - 'Ridge'
+      - 'xgb.XGBRegressor'
+    forecasting_parameters:
+      type: 'ForecasterDirect'
+      gap: 0
+      lags_grid:
+        - [1, 2, 3]
+      window_features:
+        enabled: true
+        stats: ['mean', 'mean', 'mean', 'std', 'std', 'std', 'max', 'max', 'max']
+        window_sizes: [3, 6, 12, 3, 6, 12, 3, 6, 12]
+    exogenous_features:
+      features_to_use: ['mes_sin', 'mes_cos', 'trimestre_sin', 'trimestre_cos', 'anio', 'semestre', 'festivos_conteo', 'fines_semana_conteo', 'es_semana_santa', 'es_feria_flores', 'mes_de_prima', 'conteo_novenas', 'es_puente_festivo', 'efecto_quincena', 'flag_covid', 'flag_retail', 'maduracion_contrato', 'intensidad_comercial', 'crecimiento_yoy', 'growth_momentum_3m', 'growth_momentum_6m', 'ipc_mensual', 'trm_promedio', 'tasa_desempleo', 'costo_insumos_index', 'ipc_alimentos_mensual']
+
+  # EXPERIMENTO 06: Modelo Maestro Integral (Todas las variables - Sin Pesos)
+  - name: 'run06_master_integral'
+    enabled: true
+    description: 'Hipótesis: El modelo combina todas las variables exógenas disponibles sin aplicar pesos temporales.'
+    models_to_train:
+      - 'LightGBM'
+      - 'RandomForest'
+      - 'Ridge'
+      - 'xgb.XGBRegressor'
+    forecasting_parameters:
+      type: 'ForecasterDirect'
+      gap: 0
+      lags_grid:
+        - [1, 2, 3]
+      window_features:
+        enabled: true
+        stats: ['mean', 'mean', 'mean', 'std', 'std', 'std', 'max', 'max', 'max']
+        window_sizes: [3, 6, 12, 3, 6, 12, 3, 6, 12]
     exogenous_features:
       features_to_use: 'all'
+
+  # EXPERIMENTO FINAL: Optimización por Eras (Ponderación)
+  - name: 'run_final'
+    enabled: true
+    description: 'Hipótesis: Aplicar pesos por etapas al mejor modelo descubierto en los pasos anteriores mejora el pronóstico final.'
+    models_to_train:
+      - 'LightGBM'
+      - 'RandomForest'
+      - 'Ridge'
+      - 'xgb.XGBRegressor'
+    forecasting_parameters:
+      type: 'ForecasterDirect'
+      gap: 0
+      lags_grid:
+        - [1, 2, 3]
+      window_features:
+        enabled: true
+        stats: ['mean', 'mean', 'mean', 'std', 'std', 'std', 'max', 'max', 'max']
+        window_sizes: [3, 6, 12, 3, 6, 12, 3, 6, 12]
+    training_options:
+      use_weights: true
       event_definitions:
           fase_pre_pandemia: { start_date: '2018-01-01', end_date: '2020-04-30' }
           fase_crisis_covid: { start_date: '2020-05-01', end_date: '2021-02-28' }
           fase_recuperacion: { start_date: '2021-03-01', end_date: '2022-05-31' }
           fase_retail:       { start_date: '2022-06-01', end_date: '2026-12-31' }
-    preprocessing:
-      target_transform: 'yeo-johnson'
-      differentiation: 0
-    training_options:
-      use_weights: true
       weight_function_type: 'by_era' 
       weight_distribution:
         default: 0.5
         fase_pre_pandemia: 0.5
-        fase_crisis_covid: 0.1      # Ignorar anomalía
+        fase_crisis_covid: 0.1
         fase_recuperacion: 0.7
-        fase_retail: 1.0            # Prioridad máxima
+        fase_retail: 1.0
+
+

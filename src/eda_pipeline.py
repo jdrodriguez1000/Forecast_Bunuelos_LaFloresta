@@ -155,7 +155,7 @@ def run_eda_analysis(config_path='config.yaml'):
     config = load_config(config_path)
     df, df_macro = load_data(config)
     
-    # Directorios de salida
+    # --- 1. Preparación de Directorios ---
     figures_dir = os.path.join(config['paths']['figures'], config['eda']['output']['figures_dir'])
     reports_dir = config['paths']['reports']
     ensure_directory(figures_dir)
@@ -174,15 +174,7 @@ def run_eda_analysis(config_path='config.yaml'):
         "analysis_results": {}
     }
 
-    # --- 1. Carga & Input Metrics ---
-    # config already loaded above
-    # df, df_macro already loaded above
-    
-    # Directorios de salida
-    figures_dir = os.path.join(config['paths']['figures'], config['eda']['output']['figures_dir'])
-    reports_dir = config['paths']['reports']
-    ensure_directory(figures_dir)
-    ensure_directory(reports_dir)
+    # (Metrics and figures already initialized above)
     
     # Capture Input Metrics
     report_data['input_metrics'] = {
@@ -239,8 +231,7 @@ def run_eda_analysis(config_path='config.yaml'):
     
     # --- 5. Estacionariedad (Sólo Train) ---
     adf_result = run_stationarity_test(train['unidades'])
-    report_data['analysis_results']['stationarity_test'] = adf_result
-    report_data['analysis_results']['stationarity_test']['note'] = "Calculated on Train set only"
+    adf_result['note'] = "Calculated on Train set only"
     report_data['analysis_results']['stationarity_test'] = adf_result
     
     # --- 6. Distribución Visual (Comparativa Train vs Full pero stats sobre Train) ---
@@ -339,8 +330,7 @@ def run_eda_analysis(config_path='config.yaml'):
             return None
         elif isinstance(obj, (pd.Timestamp, pd.Period)):
             return str(obj)
-            
-        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+        return str(obj)
 
     with open(report_path, 'w', encoding='utf-8') as f:
         json.dump(report_data, f, indent=4, default=convert_numpy)
